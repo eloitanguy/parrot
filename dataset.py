@@ -1,0 +1,88 @@
+from torch.utils.data import Dataset
+import json
+import argparse
+import csv
+from utils import printProgressBar
+import torchaudio
+import random
+import os
+
+HARD_TSV_PATHS = {'test': '/media/eloi/WindowsDrive/data/mozilla_speech/test.tsv',
+                  'other': '/media/eloi/WindowsDrive/data/mozilla_speech/other.tsv',
+                  'dev': '/media/eloi/WindowsDrive/data/mozilla_speech/dev.tsv',
+                  'train': '/media/eloi/WindowsDrive/data/mozilla_speech/train.tsv',
+                  'validated': '/media/eloi/WindowsDrive/data/mozilla_speech/validated.tsv'}
+
+TSV_LENGTH = {'test': 16030,
+              'other': 175085,
+              'dev': 16030,
+              'train': 435948,
+              'validated': 1085495}
+
+
+class ParrotTrainDataset(Dataset):
+    def __init__(self, train_labels, mp3_folder):
+        super.__init__()
+        with open(train_labels, 'r') as f:
+            labels = json.load(f)
+        self.labels = labels
+        self.mp3s = mp3_folder
+
+    def __len__(self):
+        return len(self.labels)
+
+    def __getitem__(self, idx):
+        ann = self.labels[idx]
+        waveform, rate = torchaudio.load(os.path.join(self.mp3_folder, ann['file_name']))
+        specgram = torchaudio.transforms.Spectrogram()(waveform)
+
+
+def split_annotations(ann_file, val_percent=0.02, test_percent=0.02):
+    with open(ann_file, 'r') as f:
+        all_annotations = json.load(f)
+
+    random.shuffle(all_annotations)
+    n = len(all_annotations)
+    idx_val = int(val_percent*n)
+    idx_test = idx_val + int(test_percent*n)
+
+    with open('val.json', 'w') as f:
+        json.dump(all_annotations[:idx_val], f, indent=4)
+    with open('test.json', 'w') as f:
+        json.dump(all_annotations[idx_val:idx_test], f, indent=4)
+    with open('train.json', 'w') as f:
+        json.dump(all_annotations[idx_test:], f, indent=4)
+
+
+def prepare_sentence(sentence):
+    return sentence.lower().replace('.', '').replace(',', '').\
+        replace('!', '').replace('"', '').replace('?', '').split(' ')
+
+
+def dump_full_annotation_json():
+    output = []
+    all_file_names = []
+    for path_label, path in HARD_TSV_PATHS.items():
+        with open(path, 'r') as f:
+            read_tsv = csv.reader(f, delimiter="\t")
+            tsv_length = TSV_LENGTH[path_label]
+            for line_idx, line in enumerate(read_tsv):
+                printProgressBar(line_idx, tsv_length, prefix=path_label)
+                file_name = line[1]
+                sentence = line[2]
+                if line_idx != 0 and file_name not in all_file_names and sentence != '':
+                    output.append({
+                        'sentence': prepare_sentence(sentence),
+                        'file_name': file_name
+                    })
+                    all_file_names.append(file_name)
+            with open('all_annotations.json', 'w') as out:  # dumping several times for sanity checking
+                json.dump(output, out, indent=4)
+
+
+if __name__ == '__main__':
+    # parser = argparse.ArgumentParser()
+    # parser.add_argument('--tsv', type=str)
+    # args = parser.parse_args()
+
+    dump_full_annotation_json()
