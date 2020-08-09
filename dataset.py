@@ -1,11 +1,16 @@
+import torch
 from torch.utils.data import Dataset
+from torch.nn.utils.rnn import pad_sequence
+from torch import transpose
 import json
-import argparse
 import csv
-from utils import printProgressBar, OneDictPerLine, MyEncoder
+from utils import printProgressBar
 import torchaudio
 import random
 import os
+
+from torch.utils.data import DataLoader
+from model import ParrotModel
 
 HARD_TSV_PATHS = {'test': '/media/eloi/WindowsDrive/data/mozilla_speech/test.tsv',
                   'other': '/media/eloi/WindowsDrive/data/mozilla_speech/other.tsv',
@@ -30,6 +35,13 @@ INDEX_TO_C = {0: 'epsilon',
               13: 'm', 14: 'n', 15: 'o', 16: 'p', 17: 'q', 18: 'r', 19: 's', 20: 't', 21: 'u', 22: 'v', 23: 'w',
               24: 'x', 25: 'y', 26: 'z', 27: ' ', 28: "'"
               }
+
+
+def train_collate_function(data):
+    spectrograms = [transpose(data[idx]['spectrogram'], 1, 0) for idx in range(len(data))]  # temp shapes (time, 128)
+    labels = [data[idx]['label'] for idx in range(len(data))]
+    spectrograms = transpose(pad_sequence(spectrograms, batch_first=True), 1, 2)  # final shape (batch_size, 128, time)
+    return {'spectrogram': spectrograms.type(torch.half), 'label': labels}
 
 
 class ParrotTrainDataset(Dataset):
@@ -94,8 +106,7 @@ def dump_full_annotation_json():
 
 
 if __name__ == '__main__':
-    # parser = argparse.ArgumentParser()
-    # parser.add_argument('--tsv', type=str)
-    # args = parser.parse_args()
-    #dump_full_annotation_json()
-    split_annotations('all_annotations.json')
+    # dump_full_annotation_json()
+    # split_annotations('all_annotations.json')
+    dev_set = ParrotTrainDataset('annotations/val.json', '/media/eloi/WindowsDrive/data/mozilla_speech/clips/')
+    dev_loader = DataLoader(dataset=dev_set, num_workers=6, batch_size=6, collate_fn=train_collate_function)

@@ -1,6 +1,8 @@
 import torch.nn as nn
 import torch.nn.functional as F
 from torch import cat, transpose
+from pytorch_model_summary import summary
+import torch
 
 
 class ResCNN_block(nn.Module):
@@ -44,7 +46,7 @@ class ResCNN(nn.Module):
 class BiRNN_block(nn.Module):
     def __init__(self, input_size, output_size):
         super(BiRNN_block, self).__init__()
-        self.LSTM = nn.LSTM(input_size=input_size, hidden_size=output_size//2, num_layers=1, batch_first=True,
+        self.LSTM = nn.LSTM(input_size=input_size, hidden_size=output_size // 2, num_layers=1, batch_first=True,
                             bidirectional=True)  # //2 because bidirectional doubles the output size (forward-backward)s
         self.dropout = nn.Dropout(0.1)
 
@@ -88,18 +90,22 @@ class ParrotModel(nn.Module):
         super(ParrotModel, self).__init__()
         self.conv0 = nn.Conv2d(1, 32, kernel_size=3, padding=3 // 2)
         self.encoder = ResCNN()
-        self.FC = nn.Linear(in_features=32*128, out_features=512)  # last conv to rnn in
+        self.FC = nn.Linear(in_features=32 * 128, out_features=512)  # last conv to rnn in
         self.RNN = BiRNN(input_size=512, hidden_size=512, output_size=512)
         self.classifier = Classifier(512, 256, num_classes=29)  # 29 characters
 
-    def forward(self, x):       # shape (batch_size, frequencies=128, time)
-        x = x.unsqueeze(1)      # shape (batch_size, channels=1, frequencies=128, time)
-        x = self.conv0(x)       # shape (batch_size, channels=32, frequencies=128, time)
-        x = self.encoder(x)     # shape (batch_size, channels=32, frequencies=128, time)
+    def forward(self, x):  # shape (batch_size, frequencies=128, time)
+        x = x.unsqueeze(1)  # shape (batch_size, channels=1, frequencies=128, time)
+        x = self.conv0(x)  # shape (batch_size, channels=32, frequencies=128, time)
+        x = self.encoder(x)  # shape (batch_size, channels=32, frequencies=128, time)
         #            unrolling to shape (batch_size, time, 128*32)
-        x = transpose(x.reshape(x.shape[0], x.shape[1]*x.shape[2], x.shape[3]), 1, 2)
-        x = self.FC(x)          # shape (batch_size, time, 512)
+        x = transpose(x.reshape(x.shape[0], x.shape[1] * x.shape[2], x.shape[3]), 1, 2)
+        x = self.FC(x)  # shape (batch_size, time, 512)
         x = transpose(x, 1, 0)  # shape (time, batch_size, 512)
-        x = self.RNN(x)         # shape (time, batch_size, 512)
+        x = self.RNN(x)  # shape (time, batch_size, 512)
         x = transpose(x, 1, 0)  # shape (batch_size, time, 512)
         return self.classifier(x)  # shape (batch_size, time, 29)
+
+
+if __name__ == '__main__':
+    print(summary(ParrotModel(), torch.zeros((1, 128, 100)), show_input=True))
