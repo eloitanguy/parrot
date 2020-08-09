@@ -2,7 +2,7 @@ from torch.utils.data import Dataset
 import json
 import argparse
 import csv
-from utils import printProgressBar
+from utils import printProgressBar, OneDictPerLine, MyEncoder
 import torchaudio
 import random
 import os
@@ -22,11 +22,9 @@ TSV_LENGTH = {'test': 16030,
 
 class ParrotTrainDataset(Dataset):
     def __init__(self, train_labels, mp3_folder):
-        super.__init__()
         with open(train_labels, 'r') as f:
-            labels = json.load(f)
-        self.labels = labels
-        self.mp3s = mp3_folder
+            self.labels = json.load(f)
+        self.mp3_folder = mp3_folder
 
     def __len__(self):
         return len(self.labels)
@@ -34,7 +32,8 @@ class ParrotTrainDataset(Dataset):
     def __getitem__(self, idx):
         ann = self.labels[idx]
         waveform, rate = torchaudio.load(os.path.join(self.mp3_folder, ann['file_name']))
-        specgram = torchaudio.transforms.Spectrogram()(waveform)
+        mel_spectrogram = torchaudio.transforms.MelSpectrogram()(waveform).squeeze(0)
+        return {'spectrogram': mel_spectrogram, 'label': ann}
 
 
 def split_annotations(ann_file, val_percent=0.02, test_percent=0.02):
@@ -55,13 +54,17 @@ def split_annotations(ann_file, val_percent=0.02, test_percent=0.02):
 
 
 def prepare_sentence(sentence):
-    return sentence.lower().replace('.', '').replace(',', '').\
-        replace('!', '').replace('"', '').replace('?', '').split(' ')
+    prep_sent = sentence.lower().replace('.', '').replace(',', '').replace('!', '').replace('"', '').replace('?', '').\
+        replace(':', '').replace('\u2019', "'").replace('\u2018', "'").replace('\u2014', "-").replace('\u201c', '').\
+        replace('\u201c=d', '').replace('\u00e2', "'").replace(':', '').split(' ')
+    out = []
+    for word in prep_sent:
+        out.extend(list(word)+[' '])
+    return out
 
 
 def dump_full_annotation_json():
-    output = []
-    all_file_names = []
+    output_by_file_name = {}
     for path_label, path in HARD_TSV_PATHS.items():
         with open(path, 'r') as f:
             read_tsv = csv.reader(f, delimiter="\t")
@@ -70,14 +73,12 @@ def dump_full_annotation_json():
                 printProgressBar(line_idx, tsv_length, prefix=path_label)
                 file_name = line[1]
                 sentence = line[2]
-                if line_idx != 0 and file_name not in all_file_names and sentence != '':
-                    output.append({
-                        'sentence': prepare_sentence(sentence),
-                        'file_name': file_name
-                    })
-                    all_file_names.append(file_name)
-            with open('all_annotations.json', 'w') as out:  # dumping several times for sanity checking
-                json.dump(output, out, indent=4)
+                if line_idx != 0 and sentence != '':
+                    output_by_file_name[file_name] = prepare_sentence(sentence)
+
+    output = [{'file_name': key, 'sentence': item} for key, item in output_by_file_name.items()]
+    with open('all_annotations.json', 'w') as out:  # dumping several times for sanity checking
+        json.dump(output, out)
 
 
 if __name__ == '__main__':
@@ -85,4 +86,4 @@ if __name__ == '__main__':
     # parser.add_argument('--tsv', type=str)
     # args = parser.parse_args()
 
-    dump_full_annotation_json()
+    split_annotations('all_annotations.json')
