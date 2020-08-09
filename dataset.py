@@ -43,7 +43,7 @@ class ParrotTrainDataset(Dataset):
 
     def __getitem__(self, idx):
         ann = self.labels[idx]
-        waveform, rate = torchaudio.load(os.path.join(self.mp3_folder, ann['file_name']))
+        waveform, _ = torchaudio.load(os.path.join(self.mp3_folder, ann['file_name']))
         mel_spectrogram = torchaudio.transforms.MelSpectrogram()(waveform).squeeze(0)
         return {'spectrogram': mel_spectrogram, 'label': ann}
 
@@ -68,7 +68,7 @@ def split_annotations(ann_file, val_percent=0.02, test_percent=0.02):
 def prepare_sentence(sentence):
     prep_sent = sentence.lower().replace('.', '').replace(',', '').replace('!', '').replace('"', '').replace('?', '').\
         replace(':', '').replace('\u2019', "'").replace('\u2018', "'").replace('\u2014', "-").replace('\u201c', '').\
-        replace('\u201c=d', '').replace('\u00e2', "'").replace(':', '').split(' ')
+        replace('\u201d', '').replace('\u00e2', "'").replace(':', '').split(' ')
     out = []
     for word in prep_sent:
         out.extend(list(word)+[' '])
@@ -97,5 +97,5 @@ if __name__ == '__main__':
     # parser = argparse.ArgumentParser()
     # parser.add_argument('--tsv', type=str)
     # args = parser.parse_args()
-
+    #dump_full_annotation_json()
     split_annotations('all_annotations.json')
