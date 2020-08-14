@@ -29,3 +29,17 @@ def one_hot_from_character(character):
     out = torch.zeros((len(INDEX_TO_C), 1))
     out[C_TO_INDEX[character]] = 1
     return out
+
+
+def loss_function(predict, target, predict_lengths, target_lengths): #predit:(time,batchsize,number of classes), target:(batchsize,max target length)
+    ctc_loss = torch.nn.CTCLoss(blank=0, reduction='none')
+    loss = ctc_loss(predict, target, predict_lengths, target_lengths)
+    return loss
+
+
+if __name__ == '__main__':
+    predict = torch.randn(10, 2, 29)
+    target = torch.randint(low=0, high=29, size=(2, 5), dtype=torch.long)
+    input_lengths=torch.tensor([[10],[10]])
+    target_lengths = torch.tensor([[5],[5]])
+    print(loss_function(predict,target,input_lengths,target_lengths))
