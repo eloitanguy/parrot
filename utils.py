@@ -24,3 +24,18 @@ def printProgressBar(iteration, total, prefix='', suffix='', decimals=1, length=
     # Print New Line on Complete
     if iteration == total:
         print()
+
+
+class AverageMeter(object):
+    def __init__(self):
+        self.number = 0.
+        self.sum = 0.
+        self.avg = 0.
+
+    def update(self, value):
+        self.number += 1.
+        self.sum += value
+        self.avg = self.sum/self.number
+
+    def reset(self):
+        self.number, self.sum, self.avg = 0., 0., 0.

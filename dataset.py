@@ -10,7 +10,6 @@ import random
 import os
 
 from torch.utils.data import DataLoader
-from model import ParrotModel
 
 HARD_TSV_PATHS = {'test': '/media/eloi/WindowsDrive/data/mozilla_speech/test.tsv',
                   'other': '/media/eloi/WindowsDrive/data/mozilla_speech/other.tsv',
@@ -41,10 +40,10 @@ def train_collate_function(data):
     spectrograms = [transpose(data[idx]['spectrogram'], 1, 0) for idx in range(len(data))]  # temp shapes (time, 128)
     labels = [data[idx]['label'] for idx in range(len(data))]
     spectrograms = transpose(pad_sequence(spectrograms, batch_first=True), 1, 2)  # final shape (batch_size, 128, time)
-    return {'spectrogram': spectrograms.type(torch.half), 'label': labels}
+    return {'spectrogram': spectrograms, 'label': labels}
 
 
-class ParrotTrainDataset(Dataset):
+class ParrotDataset(Dataset):
     def __init__(self, train_labels, mp3_folder):
         with open(train_labels, 'r') as f:
             self.labels = json.load(f)
