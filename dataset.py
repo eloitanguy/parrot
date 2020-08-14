@@ -38,7 +38,7 @@ INDEX_TO_C = {0: 'epsilon',
 
 def train_collate_function(data):
     spectrograms = [transpose(data[idx]['spectrogram'], 1, 0) for idx in range(len(data))]  # temp shapes (time, 128)
-    labels = [data[idx]['label'] for idx in range(len(data))]
+    labels = torch.tensor([data[idx]['target'] for idx in range(len(data))])  # (m, time)
     spectrograms = transpose(pad_sequence(spectrograms, batch_first=True), 1, 2)  # final shape (batch_size, 128, time)
     return {'spectrogram': spectrograms, 'label': labels}
 
@@ -53,10 +53,11 @@ class ParrotDataset(Dataset):
         return len(self.labels)
 
     def __getitem__(self, idx):
-        ann = self.labels[idx]
+        ann = self.labels[idx]['sentence']
         waveform, _ = torchaudio.load(os.path.join(self.mp3_folder, ann['file_name']))
         mel_spectrogram = torchaudio.transforms.MelSpectrogram()(waveform).squeeze(0)
-        return {'spectrogram': mel_spectrogram, 'label': ann}
+        target = [C_TO_INDEX[carac] for carac in ann]  # (time)
+        return {'spectrogram': mel_spectrogram, 'target': target}
 
 
 def split_annotations(ann_file, val_percent=0.02, test_percent=0.02):
