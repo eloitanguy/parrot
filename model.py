@@ -61,13 +61,12 @@ class BiRNN(nn.Module):
     def __init__(self, input_size, hidden_size, output_size):
         super(BiRNN, self).__init__()
         self.LSTM1 = BiRNN_block(input_size=input_size, output_size=hidden_size)
-        self.LSTM2 = BiRNN_block(input_size=hidden_size, output_size=hidden_size)
-        self.LSTM3 = BiRNN_block(input_size=hidden_size, output_size=output_size)
+        self.LSTM2 = BiRNN_block(input_size=hidden_size, output_size=output_size)
 
     def forward(self, x):
         x = self.LSTM1(x)  # shape (time, batch_size, hidden_size)
         x = self.LSTM2(x)
-        return self.LSTM3(x)
+        return x
 
 
 class Classifier(nn.Module):
@@ -90,7 +89,9 @@ class ParrotModel(nn.Module):
         super(ParrotModel, self).__init__()
         self.conv0 = nn.Conv2d(1, 32, kernel_size=3, padding=3 // 2)
         self.encoder = ResCNN()
-        self.FC = nn.Linear(in_features=32 * 128, out_features=512)  # last conv to rnn in
+        # -> 63 frequencies
+        self.shrink = nn.Conv2d(in_channels=32, out_channels=32, kernel_size=3, stride=(2, 1), padding=(0, 1))
+        self.FC = nn.Linear(in_features=32 * 63, out_features=512)  # last conv to rnn in
         self.RNN = BiRNN(input_size=512, hidden_size=512, output_size=512)
         self.classifier = Classifier(512, 256, num_classes=29)  # 29 characters
 
@@ -98,7 +99,8 @@ class ParrotModel(nn.Module):
         x = x.unsqueeze(1)  # shape (batch_size, channels=1, frequencies=128, time)
         x = self.conv0(x)  # shape (batch_size, channels=32, frequencies=128, time)
         x = self.encoder(x)  # shape (batch_size, channels=32, frequencies=128, time)
-        #            unrolling to shape (batch_size, time, 128*32)
+        x = self.shrink(x)  # shape (batch_size, channels=32, frequencies=63, time)
+        #            unrolling to shape (batch_size, time, 63*32)
         x = transpose(x.reshape(x.shape[0], x.shape[1] * x.shape[2], x.shape[3]), 1, 2)
         x = self.FC(x)  # shape (batch_size, time, 512)
         x = transpose(x, 1, 0)  # shape (time, batch_size, 512)
@@ -108,4 +110,4 @@ class ParrotModel(nn.Module):
 
 
 if __name__ == '__main__':
-    print(summary(ParrotModel(), torch.zeros((1, 128, 100)), show_input=True))
+    print(summary(ParrotModel(), torch.zeros((1, 128, 100))))

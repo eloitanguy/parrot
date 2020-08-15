@@ -36,11 +36,27 @@ INDEX_TO_C = {0: 'epsilon',
               }
 
 
-def train_collate_function(data):
-    spectrograms = [transpose(data[idx]['spectrogram'], 1, 0) for idx in range(len(data))]  # temp shapes (time, 128)
-    labels = torch.tensor([data[idx]['target'] for idx in range(len(data))])  # (m, time)
+def parrot_collate_function(data):
+    batch_size = len(data)
+    file_names = [data[idx]['file_name'] for idx in range(batch_size)]
+
+    spectrograms = [transpose(data[idx]['spectrogram'], 1, 0) for idx in range(batch_size)]  # temp shapes (time, 128)
+
+    shapes_before_pad = [x.shape for x in spectrograms]  # TODO: RM
+    for shape in shapes_before_pad:
+        if len(shape) != 2 or shape[1] != 128 or shape[0] < 10:
+            print('unexpected shape before padding {}, see files {}'.format(shape, file_names))
+
     spectrograms = transpose(pad_sequence(spectrograms, batch_first=True), 1, 2)  # final shape (batch_size, 128, time)
-    return {'spectrogram': spectrograms, 'label': labels}
+    batch_size, _, time = spectrograms.shape
+    input_lengths = torch.tensor([time for _ in range(batch_size)])
+
+    targets = [data[idx]['target'] for idx in range(batch_size)]   # batch_size * lists of different lengths (times)
+    target_lengths = torch.tensor([len(target) for target in targets])  # list of the lengths of target sentences
+    targets = pad_sequence(targets, batch_first=True)  # final shape (batch_size, time)
+
+    return {'spectrograms': spectrograms, 'targets': targets, 'file_names': file_names,
+            'input_lengths': input_lengths, 'target_lengths': target_lengths}
 
 
 class ParrotDataset(Dataset):
@@ -53,11 +69,12 @@ class ParrotDataset(Dataset):
         return len(self.labels)
 
     def __getitem__(self, idx):
-        ann = self.labels[idx]['sentence']
+        ann = self.labels[idx]
         waveform, _ = torchaudio.load(os.path.join(self.mp3_folder, ann['file_name']))
-        mel_spectrogram = torchaudio.transforms.MelSpectrogram()(waveform).squeeze(0)
-        target = [C_TO_INDEX[carac] for carac in ann]  # (time)
-        return {'spectrogram': mel_spectrogram, 'target': target}
+        # changed from squeeze(0) because the first dimension was 2 in some rare cases
+        mel_spectrogram = torchaudio.transforms.MelSpectrogram()(waveform)[0]
+        target = torch.tensor([C_TO_INDEX[carac] for carac in ann['sentence']])  # (time)
+        return {'spectrogram': mel_spectrogram, 'target': target, 'file_name': ann['file_name']}
 
 
 def split_annotations(ann_file, val_percent=0.02, test_percent=0.02):
@@ -69,21 +86,23 @@ def split_annotations(ann_file, val_percent=0.02, test_percent=0.02):
     idx_val = int(val_percent*n)
     idx_test = idx_val + int(test_percent*n)
 
-    with open('val.json', 'w') as f:
+    with open('annotations/val.json', 'w') as f:
         json.dump(all_annotations[:idx_val], f, indent=4)
-    with open('test.json', 'w') as f:
+    with open('annotations/test.json', 'w') as f:
         json.dump(all_annotations[idx_val:idx_test], f, indent=4)
-    with open('train.json', 'w') as f:
+    with open('annotations/train.json', 'w') as f:
         json.dump(all_annotations[idx_test:], f, indent=4)
 
 
 def prepare_sentence(sentence):
-    prep_sent = sentence.lower().replace('.', '').replace(',', '').replace('!', '').replace('"', '').replace('?', '').\
-        replace(':', '').replace('\u2019', "'").replace('\u2018', "'").replace('\u2014', "-").replace('\u201c', '').\
-        replace('\u201d', '').replace('\u00e2', "'").replace(':', '').split(' ')
+    prep_sent = sentence.lower().replace('\u2019', "'").replace('\u2018', "'").split(' ')
     out = []
     for word in prep_sent:
-        out.extend(list(word)+[' '])
+        word_list = list(word)
+        for c in word_list:
+            if c in C_TO_INDEX:  # invalid characters are dismissed
+                out.append(c)
+        out.append(' ')  # end of word
     return out
 
 
@@ -101,12 +120,10 @@ def dump_full_annotation_json():
                     output_by_file_name[file_name] = prepare_sentence(sentence)
 
     output = [{'file_name': key, 'sentence': item} for key, item in output_by_file_name.items()]
-    with open('all_annotations.json', 'w') as out:  # dumping several times for sanity checking
+    with open('annotations/all_annotations.json', 'w') as out:  # dumping several times for sanity checking
         json.dump(output, out)
 
 
 if __name__ == '__main__':
-    # dump_full_annotation_json()
-    # split_annotations('all_annotations.json')
-    dev_set = ParrotTrainDataset('annotations/val.json', '/media/eloi/WindowsDrive/data/mozilla_speech/clips/')
-    dev_loader = DataLoader(dataset=dev_set, num_workers=6, batch_size=6, collate_fn=train_collate_function)
+    dump_full_annotation_json()
+    split_annotations('annotations/all_annotations.json')
