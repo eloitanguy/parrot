@@ -46,7 +46,7 @@ def test_mp3_file(input_path, model, out_path):
     and outputs its inference into a text-to-speech mp3 at <output_path>"""
 
     waveform, _ = torchaudio.load(input_path)
-    mel_spectrogram = torchaudio.transforms.MelSpectrogram()(waveform).cuda()  # shapes (1, 128, time)
+    mel_spectrogram = torchaudio.transforms.MelSpectrogram(n_mels=64)(waveform).cuda()  # shapes (1, 64, time)
     out_init = model(mel_spectrogram).squeeze(0)  # shape (time, 29)
     out_trans = transpose(out_init, 1, 0)  # shape (29, time)
     decode_out = greedy_decoder(out_trans)['sentence']

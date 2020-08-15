@@ -37,7 +37,7 @@ class ResCNN(nn.Module):
         self.block2 = ResCNN_block(64, hidden_channels=hidden_channels, kernel_size=kernel_size)
         self.block3 = ResCNN_block(96, hidden_channels=hidden_channels, kernel_size=kernel_size)
 
-    def forward(self, x):  # shape (batch_size, channels=1, frequency=128, time)
+    def forward(self, x):  # shape (batch_size, channels=1, frequency=64, time)
         out1 = self.block1(x)
         out2 = self.block2(cat((x, out1), dim=1))
         return self.block3(cat((x, out1, out2), dim=1))
@@ -89,25 +89,25 @@ class ParrotModel(nn.Module):
         super(ParrotModel, self).__init__()
         self.conv0 = nn.Conv2d(1, 32, kernel_size=3, padding=3 // 2)
         self.encoder = ResCNN()
-        # -> 63 frequencies
+        # 64 -> 31 frequencies
         self.shrink = nn.Conv2d(in_channels=32, out_channels=32, kernel_size=3, stride=(2, 1), padding=(0, 1))
-        self.FC = nn.Linear(in_features=32 * 63, out_features=512)  # last conv to rnn in
-        self.RNN = BiRNN(input_size=512, hidden_size=512, output_size=512)
-        self.classifier = Classifier(512, 256, num_classes=29)  # 29 characters
+        self.FC = nn.Linear(in_features=32 * 31, out_features=256)  # last conv to rnn in
+        self.RNN = BiRNN(input_size=256, hidden_size=256, output_size=256)
+        self.classifier = Classifier(256, 128, num_classes=29)  # 29 characters
 
-    def forward(self, x):  # shape (batch_size, frequencies=128, time)
-        x = x.unsqueeze(1)  # shape (batch_size, channels=1, frequencies=128, time)
-        x = self.conv0(x)  # shape (batch_size, channels=32, frequencies=128, time)
-        x = self.encoder(x)  # shape (batch_size, channels=32, frequencies=128, time)
-        x = self.shrink(x)  # shape (batch_size, channels=32, frequencies=63, time)
-        #            unrolling to shape (batch_size, time, 63*32)
+    def forward(self, x):  # shape (batch_size, frequencies=64, time)
+        x = x.unsqueeze(1)  # shape (batch_size, channels=1, frequencies=64, time)
+        x = self.conv0(x)  # shape (batch_size, channels=32, frequencies=64, time)
+        x = self.encoder(x)  # shape (batch_size, channels=32, frequencies=64, time)
+        x = self.shrink(x)  # shape (batch_size, channels=32, frequencies=31, time)
+        #            unrolling to shape (batch_size, time, frequencies=31*channels=32)
         x = transpose(x.reshape(x.shape[0], x.shape[1] * x.shape[2], x.shape[3]), 1, 2)
-        x = self.FC(x)  # shape (batch_size, time, 512)
-        x = transpose(x, 1, 0)  # shape (time, batch_size, 512)
-        x = self.RNN(x)  # shape (time, batch_size, 512)
-        x = transpose(x, 1, 0)  # shape (batch_size, time, 512)
+        x = self.FC(x)  # shape (batch_size, time, 256)
+        x = transpose(x, 1, 0)  # shape (time, batch_size, 256)
+        x = self.RNN(x)  # shape (time, batch_size, 256)
+        x = transpose(x, 1, 0)  # shape (batch_size, time, 256)
         return self.classifier(x)  # shape (batch_size, time, 29)
 
 
 if __name__ == '__main__':
-    print(summary(ParrotModel(), torch.zeros((1, 128, 100))))
+    print(summary(ParrotModel(), torch.zeros((1, 64, 100))))

@@ -38,8 +38,8 @@ def parrot_collate_function(data):
     batch_size = len(data)
     file_names = [data[idx]['file_name'] for idx in range(batch_size)]
 
-    spectrograms = [transpose(data[idx]['spectrogram'], 1, 0) for idx in range(batch_size)]  # temp shapes (time, 128)
-    spectrograms = transpose(pad_sequence(spectrograms, batch_first=True), 1, 2)  # final shape (batch_size, 128, time)
+    spectrograms = [transpose(data[idx]['spectrogram'], 1, 0) for idx in range(batch_size)]  # temp shapes (time, 64)
+    spectrograms = transpose(pad_sequence(spectrograms, batch_first=True), 1, 2)  # final shape (batch_size, 64, time)
     batch_size, _, time = spectrograms.shape
     input_lengths = torch.tensor([time for _ in range(batch_size)])
 
@@ -64,7 +64,7 @@ class ParrotDataset(Dataset):
         ann = self.labels[idx]
         waveform, _ = torchaudio.load(os.path.join(self.mp3_folder, ann['file_name']))
         # changed from squeeze(0) because the first dimension was 2 in some rare cases
-        mel_spectrogram = torchaudio.transforms.MelSpectrogram()(waveform)[0]
+        mel_spectrogram = torchaudio.transforms.MelSpectrogram(n_mels=64)(waveform)[0]
         target = torch.tensor([C_TO_INDEX[carac] for carac in ann['sentence']])  # (time)
         return {'spectrogram': mel_spectrogram, 'target': target, 'file_name': ann['file_name']}
 
