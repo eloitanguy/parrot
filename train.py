@@ -1,12 +1,12 @@
 import torch
 from dataset import parrot_collate_function, ParrotDataset
 from tensorboardX import SummaryWriter
-from torch.optim import Adam
+from torch.optim import AdamW
 from model import ParrotModel
 from config.train_config import TrainConfig
 from utils import printProgressBar, AverageMeter
 from torch.utils.data import DataLoader
-from modules import ctc_loss
+from modules import ctc_loss, test_mp3_file
 import time
 import datetime
 import os
@@ -26,7 +26,7 @@ def train():
 
     writer = SummaryWriter(logdir=tb_folder, flush_secs=30)
     model = ParrotModel().cuda()
-    optimiser = Adam(model.parameters(), lr=cfg.initial_lr, weight_decay=cfg.weight_decay)
+    optimiser = AdamW(model.parameters(), lr=cfg.initial_lr, weight_decay=cfg.weight_decay)
 
     train_dataset = ParrotDataset(cfg.train_labels, cfg.mp3_folder)
     train_loader = DataLoader(train_dataset, batch_size=cfg.batch_size, num_workers=cfg.workers,
@@ -69,14 +69,18 @@ def train():
             avg_loss.update(loss)
             suffix = '\tloss {:.2f}/{:.2f}\tETA [{}/{}]'.format(avg_loss.avg, init_loss,
                                                                 datetime.timedelta(seconds=int(elapsed)), est)
-            printProgressBar(batch_idx, loader_length, prefix='Epoch [{}/{}]'.format(epoch, epochs), suffix=suffix)
+            printProgressBar(batch_idx, loader_length, suffix=suffix,
+                             prefix='Epoch [{}/{}]\tStep [{}/{}]'.format(epoch, epochs, batch_idx, loader_length))
 
             writer.add_scalar('Iterations/train_loss', loss, step)
 
             # saving the model
             if step % cfg.checkpoint_every == 0:
-                name = '{}/epoch_{}.pth'.format(checkpoint_folder, epoch)
-                torch.save({'model': model.state_dict(), 'epoch': epoch, 'batch_idx': batch_idx, 'step': step}, name)
+                test_name = '{}/test_epoch{}.mp3'.format(checkpoint_folder, epoch)
+                test_mp3_file(cfg.test_mp3, model, test_name)
+                checkpoint_name = '{}/epoch_{}.pth'.format(checkpoint_folder, epoch)
+                torch.save({'model': model.state_dict(), 'epoch': epoch, 'batch_idx': batch_idx, 'step': step},
+                           checkpoint_name)
 
             step += 1
             optimiser.step()
@@ -85,6 +89,8 @@ def train():
         print('')
         writer.add_scalar('Epochs/train_loss', avg_loss.avg, epoch)
         avg_loss.reset()
+        test_name = '{}/test_epoch{}.mp3'.format(checkpoint_folder, epoch)
+        test_mp3_file(cfg.test_mp3, model, test_name)
         name = '{}/epoch_{}.pth'.format(checkpoint_folder, epoch)
         torch.save({'model': model.state_dict(), 'epoch': epoch, 'batch_idx': loader_length, 'step': step}, name)
 

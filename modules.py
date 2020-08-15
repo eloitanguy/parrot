@@ -8,7 +8,6 @@ import torchaudio
 def greedy_decoder(softmax_output):
     """ Decodes a softmax output of shape (classes, time) into a sentence"""
     ctc = torch.argmax(softmax_output, dim=0)
-    print(ctc)
     decoded_classes = []
     for idx in range(ctc.shape[0]):
         if ctc[idx] == 0:  # epsilon
@@ -42,9 +41,12 @@ def ctc_loss(predict, target, predict_lengths, target_lengths):
     return loss
 
 
-def audio_to_spec(input_path, model, out_path):
+def test_mp3_file(input_path, model, out_path):
+    """ Reads the mp3 file <input_path> with the <model>
+    and outputs its inference into a text-to-speech mp3 at <output_path>"""
+
     waveform, _ = torchaudio.load(input_path)
-    mel_spectrogram = torchaudio.transforms.MelSpectrogram()(waveform)  # shapes (1, 128, time)
+    mel_spectrogram = torchaudio.transforms.MelSpectrogram()(waveform).cuda()  # shapes (1, 128, time)
     out_init = model(mel_spectrogram).squeeze(0)  # shape (time, 29)
     out_trans = transpose(out_init, 1, 0)  # shape (29, time)
     decode_out = greedy_decoder(out_trans)['sentence']

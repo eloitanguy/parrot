@@ -9,8 +9,6 @@ import torchaudio
 import random
 import os
 
-from torch.utils.data import DataLoader
-
 HARD_TSV_PATHS = {'test': '/media/eloi/WindowsDrive/data/mozilla_speech/test.tsv',
                   'other': '/media/eloi/WindowsDrive/data/mozilla_speech/other.tsv',
                   'dev': '/media/eloi/WindowsDrive/data/mozilla_speech/dev.tsv',
@@ -41,12 +39,6 @@ def parrot_collate_function(data):
     file_names = [data[idx]['file_name'] for idx in range(batch_size)]
 
     spectrograms = [transpose(data[idx]['spectrogram'], 1, 0) for idx in range(batch_size)]  # temp shapes (time, 128)
-
-    shapes_before_pad = [x.shape for x in spectrograms]  # TODO: RM
-    for shape in shapes_before_pad:
-        if len(shape) != 2 or shape[1] != 128 or shape[0] < 10:
-            print('unexpected shape before padding {}, see files {}'.format(shape, file_names))
-
     spectrograms = transpose(pad_sequence(spectrograms, batch_first=True), 1, 2)  # final shape (batch_size, 128, time)
     batch_size, _, time = spectrograms.shape
     input_lengths = torch.tensor([time for _ in range(batch_size)])
