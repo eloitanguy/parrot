@@ -65,7 +65,7 @@ def train():
             # logging
             elapsed = time.time() - epoch_start
             progress = batch_idx / loader_length
-            est = datetime.timedelta(seconds=int(elapsed / progress)) if progress > 0.01 else '-'
+            est = datetime.timedelta(seconds=int(elapsed / progress)) if progress > 0.001 else '-'
             avg_loss.update(loss)
             suffix = '\tloss {:.2f}/{:.2f}\tETA [{}/{}]'.format(avg_loss.avg, init_loss,
                                                                 datetime.timedelta(seconds=int(elapsed)), est)

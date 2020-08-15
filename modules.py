@@ -50,5 +50,8 @@ def test_mp3_file(input_path, model, out_path):
     out_init = model(mel_spectrogram).squeeze(0)  # shape (time, 29)
     out_trans = transpose(out_init, 1, 0)  # shape (29, time)
     decode_out = greedy_decoder(out_trans)['sentence']
-    tts = gtts.gTTS(decode_out)
-    tts.save(out_path)
+    try:
+        tts = gtts.gTTS(decode_out)
+        tts.save(out_path)
+    except:
+        print('Google text-to-speech encountered an error, outputting no test file.')
