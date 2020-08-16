@@ -64,7 +64,7 @@ class ParrotDataset(Dataset):
         ann = self.labels[idx]
         waveform, _ = torchaudio.load(os.path.join(self.mp3_folder, ann['file_name']))
         # changed from squeeze(0) because the first dimension was 2 in some rare cases
-        mel_spectrogram = torchaudio.transforms.MelSpectrogram(n_mels=64)(waveform)[0]
+        mel_spectrogram = torchaudio.transforms.MelSpectrogram(n_mels=64, sample_rate=8000)(waveform)[0]
         target = torch.tensor([C_TO_INDEX[carac] for carac in ann['sentence']])  # (time)
         return {'spectrogram': mel_spectrogram, 'target': target, 'file_name': ann['file_name']}
 
